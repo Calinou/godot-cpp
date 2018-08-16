@@ -1,0 +1,20 @@
+language: c
+os: osx
+
+script:
+  - scons target=debug
+  - scons target=release
+
+after_success:
+  - if [[ "$TRAVIS_TAG" != "" ]]; then
+      go get github.com/itchio/gothub;
+      export PATH="$HOME/go/bin:$PATH";
+      gothub release
+          --tag "$TRAVIS_TAG" || true;
+      gothub upload
+          --tag "$TRAVIS_TAG"
+          --name "libgodot-cppclr-$TRAVIS_TAG-macos-x86_64.tar.xz"
+          --file "dist/clr-macos-x86_64.tar.xz";
+    else
+      echo "Not a tag, skipping deployment.";
+    fi;
