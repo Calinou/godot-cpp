@@ -1,0 +1,70 @@
+language: cpp
+dist: xenial
+osx_image: xcode10.1
+
+matrix:
+  include:
+    - name: "Linux Debug"
+      os: linux
+      compiler: gcc
+      env: TARGET=debug PACKAGE_INCLUDES=1
+
+    - name: "Linux Release"
+      os: linux
+      compiler: gcc
+      env: TARGET=release
+
+    - name: "macOS Debug"
+      os: osx
+      compiler: clang
+      env: TARGET=debug
+
+    - name: "macOS Release"
+      os: osx
+      compiler: clang
+      env: TARGET=release
+
+    - name: "Windows Debug"
+      os: windows
+      env: TARGET=debug
+
+    - name: "Windows Release"
+      os: windows
+      env: TARGET=release
+
+install:
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+      sudo apt-get update -qq;
+      sudo apt-get install -qqq scons pkg-config build-essential zip;
+    fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      brew update;
+      brew install scons;
+    fi
+  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then
+      powershell -Command "Set-ExecutionPolicy RemoteSigned -scope CurrentUser";
+      powershell -Command "iex (new-object net.webclient).downloadstring('https://get.scoop.sh')";
+      scoop install python scons;
+    fi
+
+script:
+  - scons target="$TARGET" bits=64 generate_bindings=yes;
+  - if [[ -n "$PACKAGE_INCLUDES" ]]; then
+      rm include/**/*.obj include/gen/.gitignore;
+      cp -r include/ bin/include/;
+    fi
+  - pushd bin
+  - for file in *; do
+      zip -mr9 "$file.zip" "$file";
+    done
+  - popd
+
+deploy:
+  provider: releases
+  api_key:
+    secure: wty6uRB+kzhYdlLV+pt6pzQSjLMr07kLl9cJjet5Jb4fgmFLyqLB4Mv7a5OdXJuUdGmKoZe3u3FKjlrD5Xh4aGZHKmw6QHHSQ4do5WYngOQ6Ybb7QJ7hTOIJqBaNX59ZAylnvK+NvMz6hlmwEjOnyIBAoc+VzcSczZU5qcgDcfd7qlBst4jyyiegneCnJVoUBcP9fdsz91xyohhceCvp+inidaBoIQLvCGkRC3KpDrPUHQMASW8Za7jg6G91DYEbv+1JovdGNEnSICHZYLrQ0GDPRxtNAadh0J4xfSaVhaYeKJA62w0X5KGB3J/Qiadc1UbpEDFU6EEreNxwUCv8ZAWFuhYukZZQmPXI5rrX0KDZ6SVDPoIxSoYTx4d4HBeT9K3bEhd0zJ+OgHAEczy4hCVNzVUNuqlIq72wE6woEoe/zezDg0GAidF5Ky72uHxmd4C4yZVt4JoVbb1I9c/ooA5PIJj+tfkgl1zbhDmhBYzqO+PuM6XXiD5cwCmuhrwkKMTdBc7+Y9OH9Kw5CfCzm1fPJyca1oZcER7Q6A65WQGJnCPFYpadoRHh9JuJ3TIE3f+SFwuPu8LuJL5QPPOWzQttpk9L7t06nymwpoUdloufo7nWDHjPhsmvGcuM6uoH+KLyyEgmafhxHDT7HMTJgxN4qfhQQEr9aHvsrTnC0Fo=
+  skip_cleanup: true
+  file_glob: true
+  file: bin/*
+  on:
+    repo: Calinou/godot-cpp
