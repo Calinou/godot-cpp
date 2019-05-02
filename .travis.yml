@@ -16,7 +16,7 @@ matrix:
     - name: Linux Debug + Static Checks
       os: linux
       compiler: gcc
-      env: TARGET=debug STATIC_CHECKS=yes
+      env: TARGET=debug PACKAGE_INCLUDES=yes STATIC_CHECKS=yes
       addons:
         apt:
           sources:
@@ -27,11 +27,11 @@ matrix:
     - name: Linux Release
       os: linux
       compiler: gcc
+      env: TARGET=release
       addons:
         apt:
           packages:
             [scons, pkg-config, build-essential, p7zip-full]
-      env: TARGET=release
 
     - name: macOS Debug
       os: osx
@@ -42,6 +42,24 @@ matrix:
       os: osx
       compiler: clang
       env: TARGET=release
+
+    - name: Windows MinGW Debug
+      os: linux
+      compiler: gcc
+      env: TARGET=debug MINGW=yes
+      addons:
+        apt:
+          packages:
+            [scons, pkg-config, build-essential, p7zip-full, mingw-w64]
+
+    - name: Windows MinGW Release
+      os: linux
+      compiler: gcc
+      env: TARGET=release MINGW=yes
+      addons:
+        apt:
+          packages:
+            [scons, pkg-config, build-essential, p7zip-full, mingw-w64]
 
     - name: Windows MSVC Debug
       os: windows
@@ -69,8 +87,44 @@ script:
       export SCONS="scons";
     fi
 
-  - $SCONS target="$TARGET" bits=64 generate_bindings=yes $SCONS_FLAGS;
+  - if [[ "$MINGW" == "yes" ]]; then
+      export PLATFORM="platform=windows";
+    else
+      export PLATFORM="";
+    fi
+
+  - $SCONS $PLATFORM target="$TARGET" bits=64 generate_bindings=yes $SCONS_FLAGS;
+
+  - if [[ "$TRAVIS_OS_NAME" == "linux" && "$TARGET" == "release" ]]; then
+      strip bin/*;
+    fi
+
+  - if [[ -n "$PACKAGE_INCLUDES" ]]; then
+      rm include/**/*.obj include/gen/.gitignore;
+      cp -r include/ bin/include/;
+    fi
+
+  # Create ZIP archives for deployment
+  - if [[ -n "$TRAVIS_TAG" ]]; then
+      pushd bin;
+      for file in *; do
+        7z a -mx=9 "$file.zip" "$file";
+        rm "$file";
+      done;
+      popd;
+    fi
 
   - if [[ "$STATIC_CHECKS" == "yes" ]]; then
       sh ./misc/travis/clang-format.sh;
     fi
+
+deploy:
+  provider: releases
+  api_key:
+    secure: znA73ssw6gpWWKDq84g7Qam05dnMoYr1Qo2hsOnuXwQ3zrKtyBkC1vrcliOsL+mgDusyEXJe59z+qpjUHrZU+TXqymVMTlh6o0hAIUTEfn1QSK8YveFYAtFlm+T6p1xQ/7FdD2HjzXrUG1cBrAxYqwVP/NdJF4vaRG+iF+hvUzKouPDWw01gzpo6ZTmJaj9ljSqeRxoTVXpDcxABtRz/BBSX07BYhjeCX9E16VPPqaHMvAD8deC3gKVOXXod4YBbfi8lq+ZCzexcNkoaxsNEnonWSUviDml4sgChHVkke5793sdwxqOsIESAYTowN8xaOYmjvFDUU5XOMCM6C2xlxNUqEL325m77WJOXzDFfZAJtKwH5/6Cy9G9NKP5MVU5seuZL6GZsGjzopjbq9LjbMxyu/GTEOuGtyJinZrYS4/T5gLxSlEAD3Iprcc81k+AHnj51mhqpMBXQUEqnEzb1rSXtkUIZuq/2TxWIL1VXngXVXEvP+NZkDLGio05zLXllbfgATBna/SJWGYJl8gbWMQ1RflCffw8D+OVzAc3psSCVmFdT8bbeNHFL/bqn2VORfDMbsLs7p0ObaS/Bsz7Pd4Pqj5VHPP/rM0HIDwHucjnuf5/JV3J3BNCPyhMI97wCzYvp1vuNPI1FMaebfDGvGfTFFOg8NlT1pLSg2uCE9j4=
+  skip_cleanup: true
+  file_glob: true
+  file: bin/*
+  on:
+    repo: Calinou/godot-cpp
+    tags: true
